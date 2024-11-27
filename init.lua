@@ -92,6 +92,16 @@ local function place_layers(starting_point, slices)
             for c, cval in  pairs(slices[t][r]) do
                 local value = slices[t][r][c]
                 if value and (not is_dead_cell(value)) and value['patch_type'] ~= 'DistillationQubit' then
+                    local vid = -1;
+                    if value['patch_type'] == 'Qubit' and value['text'] ~= "Not bound"then
+                        vid = value['text']
+                    elseif value['patch_type'] == 'Qubit' and value['text'] == "Not bound"then
+
+                        vid = -1
+                    end
+
+                    -- minetest.chat_send_all("id ->"..vid.." ---- "..value['text'])
+
                     
                     local connections = {0, 0, 0, 0, 1, 1};
                     if stitch_border(value['edges']['Top'], value['patch_type']) then connections[1] = 1 end
@@ -122,7 +132,14 @@ local function place_layers(starting_point, slices)
                     if existing_node.name ~= "air" then
                         minetest.remove_node(position)
                     end
-                    minetest.place_node(position,  { name = name })
+                    minetest.place_node(position,  { name = name})
+
+                    local meta = core.get_meta(position)
+                    meta:set_int("id", vid)
+
+                    local mid = tostring(core.get_meta(position):get_int("id"))
+                    minetest.chat_send_all(mid)
+
                 end
             end
         end
@@ -143,8 +160,10 @@ for j = 0, 63, 1 do
         math.floor(j / 8) % 2,
         math.floor(j / 4) % 2,
         math.floor(j / 2) % 2,
-        math.floor(j / 1) % 2};
+        math.floor(j / 1) % 2
+    }
 
+    -- Register qubit node
     minetest.register_node(string.format("latticesurgery:qubit_%s", array_to_s(bitstring)), {
         description = string.format("Qubit %s", array_to_s(bitstring)),
         tiles = {"qubit.png"},
@@ -153,55 +172,139 @@ for j = 0, 63, 1 do
             type = "connected",
             drawtype = "nodebox",
             fixed = {
-                -3/8 - bitstring[1] * 1/8, 
+                -3/8 - bitstring[1] * 1/8,
                 -3/8 - bitstring[5] * 1/8,
-                -3/8 - bitstring[3] * 1/8, 
+                -3/8 - bitstring[3] * 1/8,
                 3/8 + bitstring[2] * 1/8,
                 3/8 + bitstring[6] * 1/8,
-                3/8 + bitstring[4] * 1/8},
+                3/8 + bitstring[4] * 1/8
+            }
         },
-        groups = {cracky = 1} -- , falling_node=2}
+        --groups = {cracky = 1}, -- , falling_node=2},
+        groups = {oddly_breakable_by_hand = 1, dig_immediate = 3},  -- Break instantly by hand
+        -- The on_dig callback to remove the node and break neighboring nodes
+        on_dig = function(pos, node, digger)
+            -- Break the original routing node
+            local start_id = core.get_meta(pos):get_int("id")
+            minetest.remove_node(pos)
+            local coords = minetest.pos_to_string(pos)
+
+            minetest.chat_send_all("Start from" .. start_id )
+            
+            --break_neighbors(pos, start_id)
+        end
     })
 
+    -- Register distillation node
     minetest.register_node(string.format("latticesurgery:distillation_%s", array_to_s(bitstring)), {
         description = string.format("Distillation volume", array_to_s(bitstring)),
         tiles = {"distillation.png"},
         drawtype = "nodebox",
-            node_box = {
-                type = "connected",
-                drawtype = "nodebox",
-                fixed = {
-                    -3/8 - bitstring[1] * 1/8, 
-                    -3/8 - bitstring[5] * 1/8,
-                    -3/8 - bitstring[3] * 1/8, 
-                    3/8 + bitstring[2] * 1/8,
-                    3/8 + bitstring[6] * 1/8,
-                    3/8 + bitstring[4] * 1/8},
-            },
+        node_box = {
+            type = "connected",
+            drawtype = "nodebox",
+            fixed = {
+                -3/8 - bitstring[1] * 1/8,
+                -3/8 - bitstring[5] * 1/8,
+                -3/8 - bitstring[3] * 1/8,
+                3/8 + bitstring[2] * 1/8,
+                3/8 + bitstring[6] * 1/8,
+                3/8 + bitstring[4] * 1/8
+            }
+        },
         groups = {cracky = 1} -- , falling_node=2}
     })
+    -- Forward declarations
+    local break_node
+    local break_neighbors
 
+    -- Function to check all neighbors for qubit or routing nodes and break them
+    break_neighbors = function(pos, start_id, visited)
+        visited = visited or {}
+
+        -- Convert position to string for tracking visited nodes
+        local pos_key = minetest.pos_to_string(pos)
+        if visited[pos_key] then
+            return  -- Skip if already visited
+        end
+        visited[pos_key] = true  -- Mark this node as visited
+
+        -- Define the six neighbor positions (left, right, above, below, front, back)
+        local neighbors = {
+            {x = pos.x + 1, y = pos.y, z = pos.z},  -- Right
+            {x = pos.x - 1, y = pos.y, z = pos.z},  -- Left
+            {x = pos.x, y = pos.y + 1, z = pos.z},  -- Above
+            {x = pos.x, y = pos.y - 1, z = pos.z},  -- Below
+            {x = pos.x, y = pos.y, z = pos.z + 1},  -- Front
+            {x = pos.x, y = pos.y, z = pos.z - 1},  -- Back
+        }
+
+        -- Loop through all neighbors and check for qubit or routing nodes
+        for _, neighbor_pos in ipairs(neighbors) do
+            break_node(neighbor_pos, start_id, visited)  -- Break qubit or routing neighbors recursively
+        end
+    end
+
+    -- Function to check if a node is a qubit or routing node and break it if it is
+    break_node = function(pos, start_id, visited)
+        local node = minetest.get_node(pos)
+
+        -- Check if the node is a qubit or routing node
+        if node.name:match("^latticesurgery:qubit") or node.name:match("^latticesurgery:routing") then
+            local coords = minetest.pos_to_string(pos)  -- Convert position to string for logging
+            local node_id = core.get_meta(pos):get_int("id")
+            -- minetest.chat_send_all("Node found and broken at: " .. coords)  -- Print node details
+            -- Print node details   
+
+            -- Remove the node if its id matches the start_id
+            if node_id == start_id then
+                minetest.chat_send_all("Node id: was here " .. node_id )
+                minetest.remove_node(pos)
+            end
+
+            -- Recursively break all neighbors of this node
+            break_neighbors(pos, start_id, visited)
+        end
+    end
+
+    -- Loop to register routing nodes
     for i = 1, 12, 1 do
-        minetest.register_node(string.format("latticesurgery:routing_%i_%s",i, array_to_s(bitstring)), {
-            description = string.format("Routing Volume color variation %i %s",i, array_to_s(bitstring)),
-            tiles = {string.format("routing_%i.png",i)},
+        local node_name = string.format("latticesurgery:routing_%i_%s", i, array_to_s(bitstring))
+
+        -- Register the routing node
+        minetest.register_node(node_name, {
+            description = string.format("Routing Volume color variation %i %s", i, array_to_s(bitstring)),
+            tiles = {string.format("routing_%i.png", i)},
             drawtype = "nodebox",
             node_box = {
                 type = "connected",
                 drawtype = "nodebox",
                 fixed = {
-                    -3/8 - bitstring[1] * 1/8, 
+                    -3/8 - bitstring[1] * 1/8,
                     -3/8 - bitstring[5] * 1/8,
-                    -3/8 - bitstring[3] * 1/8, 
+                    -3/8 - bitstring[3] * 1/8,
                     3/8 + bitstring[2] * 1/8,
                     3/8 + bitstring[6] * 1/8,
-                    3/8 + bitstring[4] * 1/8},
+                    3/8 + bitstring[4] * 1/8
+                }
             },
-            groups = {cracky = 1} -- , falling_node=2}
+            groups = {oddly_breakable_by_hand = 1, dig_immediate = 3},  -- Break instantly by hand
+            drop = "latticesurgery:routing_item",
+
+            -- The on_dig callback to remove the node and break neighboring nodes
+            on_dig = function(pos, node, digger)
+                -- Break the original routing node
+                local start_id = core.get_meta(pos):get_int("id")
+                minetest.remove_node(pos)
+                local coords = minetest.pos_to_string(pos)
+
+                minetest.chat_send_all("Start from" .. start_id )
+                
+                break_neighbors(pos, start_id)
+            end
         })
     end
 end
-
 minetest.register_node("latticesurgery:dead_cell", {
     description = "Dead Cell",
     tiles = {"dead.png"},
