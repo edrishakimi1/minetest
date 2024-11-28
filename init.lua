@@ -16,7 +16,9 @@ ie = minetest.request_insecure_environment()
 
 local function insecure_load_file()
     local mod_path = minetest.get_modpath("latticesurgery")
-    local json_file_path = mod_path .. "/crossings/grover_3.json"
+    -- local json_file_path = mod_path .. "/crossings/grover_3.json"
+    -- cp ~/CLionProjects/liblsqecc/cmake-build-debug/n_output.json .
+    local json_file_path = mod_path .. "/n_output.json"
     f = ie.io.open(json_file_path)
     s = f:read("a")
     ie.io.close(f)
@@ -85,20 +87,14 @@ local function max_key(start, ll)
     end
     return acc
 end
-
+local routingRegionId = -1;
 local function place_layers(starting_point, slices)
     for t = 1, #slices do
         for r, rval in pairs(slices[t]) do
             for c, cval in  pairs(slices[t][r]) do
                 local value = slices[t][r][c]
                 if value and (not is_dead_cell(value)) and value['patch_type'] ~= 'DistillationQubit' then
-                    local vid = -1;
-                    if value['patch_type'] == 'Qubit' and value['text'] ~= "Not bound"then
-                        vid = value['text']
-                    elseif value['patch_type'] == 'Qubit' and value['text'] == "Not bound"then
-
-                        vid = -1
-                    end
+                    
 
                     -- minetest.chat_send_all("id ->"..vid.." ---- "..value['text'])
 
@@ -127,19 +123,27 @@ local function place_layers(starting_point, slices)
                         name = string.format("latticesurgery:qubit_%s", array_to_s(connections))
                     end
 
-                    local position = add_vectors(starting_point, { x = r, y = t, z = c })
+                    -- t-1 seems wrong ... why??
+                    local position = add_vectors(starting_point, { x = r, y = t -1 , z = c })
                     local existing_node = minetest.get_node(position)
                     if existing_node.name ~= "air" then
                         minetest.remove_node(position)
                     end
                     minetest.place_node(position,  { name = name})
 
-                    local meta = core.get_meta(position)
-                    meta:set_int("id", vid)
+                    if value['patch_type'] == 'Ancilla' and value['routing_region_id'] ~= "Not bound"then
+                        routingRegionId = value['routing_region_id']
 
-                    local mid = tostring(core.get_meta(position):get_int("id"))
-                    minetest.chat_send_all(mid)
+                        local meta = core.get_meta(position)
+                        meta:set_int("id", routingRegionId)
+                    end
 
+                    if(core.get_meta(position):contains("id")) then
+                        local mid = tostring(core.get_meta(position):get_int("id") .. " at " .. minetest.pos_to_string(position))
+                        minetest.chat_send_all(mid)
+                    else
+                        minetest.chat_send_all("not found")
+                    end                 
                 end
             end
         end
@@ -149,8 +153,6 @@ end
 
 
 NUM_ROUTING_COLOURS = 12
-
-
 
 for j = 0, 63, 1 do
     -- j to bit string
@@ -185,11 +187,12 @@ for j = 0, 63, 1 do
         -- The on_dig callback to remove the node and break neighboring nodes
         on_dig = function(pos, node, digger)
             -- Break the original routing node
-            local start_id = core.get_meta(pos):get_int("id")
-            minetest.remove_node(pos)
-            local coords = minetest.pos_to_string(pos)
+            --local start_id = core.get_meta(pos):get_int("id")
+            --local start_id = routingRegionId
+            --minetest.remove_node(pos)
+            --local coords = minetest.pos_to_string(pos)
 
-            minetest.chat_send_all("Start from" .. start_id )
+            --minetest.chat_send_all("Start from" .. start_id )
             
             --break_neighbors(pos, start_id)
         end
@@ -223,11 +226,11 @@ for j = 0, 63, 1 do
         visited = visited or {}
 
         -- Convert position to string for tracking visited nodes
-        local pos_key = minetest.pos_to_string(pos)
-        if visited[pos_key] then
+        local spos = minetest.pos_to_string(pos)
+        if visited[spos] then
             return  -- Skip if already visited
         end
-        visited[pos_key] = true  -- Mark this node as visited
+        visited[spos] = true  -- Mark this node as visited
 
         -- Define the six neighbor positions (left, right, above, below, front, back)
         local neighbors = {
@@ -247,23 +250,32 @@ for j = 0, 63, 1 do
 
     -- Function to check if a node is a qubit or routing node and break it if it is
     break_node = function(pos, start_id, visited)
+        -- Convert position to string for logging
+        local spos = minetest.pos_to_string(pos)  
+        
         local node = minetest.get_node(pos)
 
-        -- Check if the node is a qubit or routing node
-        if node.name:match("^latticesurgery:qubit") or node.name:match("^latticesurgery:routing") then
-            local coords = minetest.pos_to_string(pos)  -- Convert position to string for logging
-            local node_id = core.get_meta(pos):get_int("id")
-            -- minetest.chat_send_all("Node found and broken at: " .. coords)  -- Print node details
-            -- Print node details   
-
-            -- Remove the node if its id matches the start_id
-            if node_id == start_id then
-                minetest.chat_send_all("Node id: was here " .. node_id )
-                minetest.remove_node(pos)
+        -- Check if the node is a routing node
+        -- if node.name:match("^latticesurgery:qubit") or 
+        if node.name:match("^latticesurgery:routing") then
+            rid = -1
+            -- check if key is available
+            if (core.get_meta(pos):contains("id")) then
+                local rid = core.get_meta(pos):get_int("id")
+                minetest.chat_send_all("Node id: " .. rid .. " " .. start_id .. " " .. node.name)
+            else
+                minetest.chat_send_all("nothing here !! :(" .. spos)
             end
+                   
+
+            --if tostring(rid) == tostring(start_id) then
+                minetest.chat_send_all("Routing id: broke here and it was " .. rid )
+                minetest.remove_node(pos)
+
+                break_neighbors(pos, start_id, visited)
+            --end
 
             -- Recursively break all neighbors of this node
-            break_neighbors(pos, start_id, visited)
         end
     end
 
@@ -294,13 +306,15 @@ for j = 0, 63, 1 do
             -- The on_dig callback to remove the node and break neighboring nodes
             on_dig = function(pos, node, digger)
                 -- Break the original routing node
-                local start_id = core.get_meta(pos):get_int("id")
-                minetest.remove_node(pos)
-                local coords = minetest.pos_to_string(pos)
 
-                minetest.chat_send_all("Start from" .. start_id )
-                
-                break_neighbors(pos, start_id)
+                visited  = {}
+                break_node(pos, core.get_meta(pos):get_int("id"), visited)
+
+                --local start_id = core.get_meta(pos):get_int("id")
+                --minetest.remove_node(pos)
+                --local coords = minetest.pos_to_string(pos)
+                --minetest.chat_send_all("Start from" .. start_id )
+                --break_neighbors(pos, start_id)
             end
         })
     end
@@ -313,45 +327,45 @@ minetest.register_node("latticesurgery:dead_cell", {
 })
 
 
-
-LS_LOCAL_START_POS = nil
+-- initialize an empty vector
+LS_LOCAL_START_POS = vector.new(0,0,0)
 
 local function set_pos(name, param)
     local player = minetest.get_player_by_name(name)
-    LS_LOCAL_START_POS = player:get_pos()
+    LS_LOCAL_START_POS = vector.round(player:get_pos())
+
+    -- minetest.chat_send_all(minetest.pos_to_string(LS_LOCAL_START_POS))
 end
+
+local function crossings(name, param)
+    local slices = insecure_load_crossings(param)
+
+    --set the position of the player with name
+    set_pos(name)
+
+    place_layers(LS_LOCAL_START_POS, slices)
+end
+
+local function do_compile(name, param)
+    local slices = insecure_load_file()
+
+    --set the position of the player with name
+    set_pos(name)
+
+    place_layers(LS_LOCAL_START_POS, slices)
+end
+
+
+-- Register the following commands in the console
+
+minetest.register_chatcommand("make", {
+    func = do_compile
+})
 
 minetest.register_chatcommand("set_pos", {
     func = set_pos
 })
 
-local function crossings(name, param)
-    local slices = insecure_load_crossings(param)
-    if LS_LOCAL_START_POS ~= nil then
-        place_layers(LS_LOCAL_START_POS, slices)
-    else
-        local player = minetest.get_player_by_name(name)
-        place_layers(player:get_pos(), slices)
-    end
-
-end
-
 minetest.register_chatcommand("crossings", {
     func = crossings
 })
-
-
-local function do_compile(name, param)
-    local slices = insecure_load_file()
-    if LS_LOCAL_START_POS ~= nil then
-        place_layers(LS_LOCAL_START_POS, slices)
-    else
-        local player = minetest.get_player_by_name(name)
-        place_layers(player:get_pos(), slices)
-    end
-end
-
-minetest.register_chatcommand("do_compile", {
-    func = do_compile
-})
-
