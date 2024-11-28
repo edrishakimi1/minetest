@@ -258,22 +258,22 @@ for j = 0, 63, 1 do
         -- Check if the node is a routing node
         -- if node.name:match("^latticesurgery:qubit") or 
         if node.name:match("^latticesurgery:routing") then
-            rid = -1
+            local rid = -1
             -- check if key is available
             if (core.get_meta(pos):contains("id")) then
-                local rid = core.get_meta(pos):get_int("id")
+                 rid = core.get_meta(pos):get_int("id")
                 minetest.chat_send_all("Node id: " .. rid .. " " .. start_id .. " " .. node.name)
             else
                 minetest.chat_send_all("nothing here !! :(" .. spos)
             end
                    
 
-            --if tostring(rid) == tostring(start_id) then
+            if rid == start_id then
                 minetest.chat_send_all("Routing id: broke here and it was " .. rid )
                 minetest.remove_node(pos)
 
                 break_neighbors(pos, start_id, visited)
-            --end
+            end
 
             -- Recursively break all neighbors of this node
         end
