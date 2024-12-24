@@ -136,6 +136,8 @@ local function place_layers(starting_point, slices)
 
                         local meta = core.get_meta(position)
                         meta:set_int("id", routingRegionId)
+                        minetest.chat_send_all("Set id: " .. routingRegionId .. " at position: " .. minetest.pos_to_string(position))
+
                     end
 
                     if(core.get_meta(position):contains("id")) then
@@ -220,104 +222,142 @@ for j = 0, 63, 1 do
     -- Forward declarations
     local break_node
     local break_neighbors
+    local break_node_landing
+    local broken_nodes = {}
+   -- Initialize an empty vector
+LS_LOCAL_START_POS = vector.new(0, 0, 0)
 
-    -- Function to check all neighbors for qubit or routing nodes and break them
-    break_neighbors = function(pos, start_id, visited)
-        visited = visited or {}
+-- Initialize the broken_nodes table
+local broken_nodes = {}
 
-        -- Convert position to string for tracking visited nodes
-        local spos = minetest.pos_to_string(pos)
-        if visited[spos] then
-            return  -- Skip if already visited
+-- Function to handle node landing logic
+local function break_node_landing(pos, old_pos, start_id)
+    local node = minetest.get_node(pos)
+    minetest.log(" NEW POS" .. minetest.pos_to_string(pos))
+
+    -- Check if the node is a routing node
+    if node.name:match("^latticesurgery:routing") then
+        local rid = -1
+
+        -- Check if key is available
+        local meta = core.get_meta(pos)
+        if meta:contains("id") then
+            rid = meta:get_int("id")
         end
-        visited[spos] = true  -- Mark this node as visited
 
-        -- Define the six neighbor positions (left, right, above, below, front, back)
-        local neighbors = {
-            {x = pos.x + 1, y = pos.y, z = pos.z},  -- Right
-            {x = pos.x - 1, y = pos.y, z = pos.z},  -- Left
-            {x = pos.x, y = pos.y + 1, z = pos.z},  -- Above
-            {x = pos.x, y = pos.y - 1, z = pos.z},  -- Below
-            {x = pos.x, y = pos.y, z = pos.z + 1},  -- Front
-            {x = pos.x, y = pos.y, z = pos.z - 1},  -- Back
-        }
+        -- Check if the id matches and the position is below the old position
+        if rid == start_id and pos.x == old_pos.x and pos.z == old_pos.z and pos.y < old_pos.y then
+            minetest.log("action", "Node id matched and position condition met. Removing node at " .. minetest.pos_to_string(pos))
+            minetest.remove_node(pos)
 
-        -- Loop through all neighbors and check for qubit or routing nodes
-        for _, neighbor_pos in ipairs(neighbors) do
-            break_node(neighbor_pos, start_id, visited)  -- Break qubit or routing neighbors recursively
-        end
-    end
-
-    -- Function to check if a node is a qubit or routing node and break it if it is
-    break_node = function(pos, start_id, visited)
-        -- Convert position to string for logging
-        local spos = minetest.pos_to_string(pos)  
-        
-        local node = minetest.get_node(pos)
-
-        -- Check if the node is a routing node
-        -- if node.name:match("^latticesurgery:qubit") or 
-        if node.name:match("^latticesurgery:routing") then
-            local rid = -1
-            -- check if key is available
-            if (core.get_meta(pos):contains("id")) then
-                 rid = core.get_meta(pos):get_int("id")
-                minetest.chat_send_all("Node id: " .. rid .. " " .. start_id .. " " .. node.name)
-            else
-                minetest.chat_send_all("nothing here !! :(" .. spos)
-            end
-                   
-
-            if rid == start_id then
-                minetest.chat_send_all("Routing id: broke here and it was " .. rid )
-                minetest.remove_node(pos)
-
-                break_neighbors(pos, start_id, visited)
-            end
-
-            -- Recursively break all neighbors of this node
+            -- Continue breaking neighboring nodes
+            break_neighbors(pos, start_id, {})
+        else
+            minetest.log("action", "Node id did not match or position condition not met at " .. minetest.pos_to_string(pos))
         end
     end
+end
 
-    -- Loop to register routing nodes
-    for i = 1, 12, 1 do
-        local node_name = string.format("latticesurgery:routing_%i_%s", i, array_to_s(bitstring))
+-- Function to check if a node is a qubit or routing node and break it if it is
+local function break_node(pos, start_id, visited)
+    local node = minetest.get_node(pos)
 
-        -- Register the routing node
-        minetest.register_node(node_name, {
-            description = string.format("Routing Volume color variation %i %s", i, array_to_s(bitstring)),
-            tiles = {string.format("routing_%i.png", i)},
-            drawtype = "nodebox",
-            node_box = {
-                type = "connected",
-                drawtype = "nodebox",
-                fixed = {
-                    -3/8 - bitstring[1] * 1/8,
-                    -3/8 - bitstring[5] * 1/8,
-                    -3/8 - bitstring[3] * 1/8,
-                    3/8 + bitstring[2] * 1/8,
-                    3/8 + bitstring[6] * 1/8,
-                    3/8 + bitstring[4] * 1/8
-                }
-            },
-            groups = {oddly_breakable_by_hand = 1, dig_immediate = 3},  -- Break instantly by hand
-            drop = "latticesurgery:routing_item",
+    -- Check if the node is a routing node
+    if node.name:match("^latticesurgery:routing") then
+        local rid = -1
+        local meta = core.get_meta(pos)
+        if meta:contains("id") then
+            rid = meta:get_int("id")
+        end
 
-            -- The on_dig callback to remove the node and break neighboring nodes
-            on_dig = function(pos, node, digger)
-                -- Break the original routing node
+        if tostring(rid) == tostring(start_id) then
+            broken_nodes[start_id] = pos
+            minetest.chat_send_all("action ".. start_id .. minetest.pos_to_string(pos))
 
-                visited  = {}
-                break_node(pos, core.get_meta(pos):get_int("id"), visited)
+            minetest.remove_node(pos)
 
-                --local start_id = core.get_meta(pos):get_int("id")
-                --minetest.remove_node(pos)
-                --local coords = minetest.pos_to_string(pos)
-                --minetest.chat_send_all("Start from" .. start_id )
-                --break_neighbors(pos, start_id)
+            -- Trigger falling check for nodes above
+            local pos_above = { x = pos.x, y = pos.y + 1, z = pos.z }
+            minetest.check_for_falling(pos_above)
+
+            -- Continue breaking neighboring nodes
+            break_neighbors(pos, start_id, visited)
+
+            -- Check if broken_nodes[rid] is not nil before calling break_node_landing
+            if broken_nodes[rid] then
+                break_node_landing(pos, broken_nodes[rid], rid)
             end
-        })
+        end
     end
+end
+
+-- Function to check all neighbors for qubit or routing nodes and break them
+function break_neighbors(pos, start_id, visited)
+    visited = visited or {}
+
+    -- Convert position to string for tracking visited nodes
+    local spos = minetest.pos_to_string(pos)
+    if visited[spos] then
+        return  -- Skip if already visited
+    end
+    visited[spos] = true  -- Mark this node as visited
+
+    -- Define the six neighbor positions (left, right, above, below, front, back)
+    local neighbors = {
+        { x = pos.x + 1, y = pos.y, z = pos.z },  -- Right
+        { x = pos.x - 1, y = pos.y, z = pos.z },  -- Left
+        { x = pos.x, y = pos.y + 1, z = pos.z },  -- Above
+        { x = pos.x, y = pos.y - 1, z = pos.z },  -- Below
+        { x = pos.x, y = pos.y, z = pos.z + 1 },  -- Front
+        { x = pos.x, y = pos.y, z = pos.z - 1 },  -- Back
+    }
+
+    -- Loop through all neighbors and check for qubit or routing nodes
+    for _, neighbor_pos in ipairs(neighbors) do
+        break_node(neighbor_pos, start_id, visited)  -- Break qubit or routing neighbors recursively
+    end
+end
+
+-- Loop to register routing nodes
+for i = 1, 12, 1 do
+    local node_name = string.format("latticesurgery:routing_%i_%s", i, array_to_s(bitstring))
+
+    -- Register the routing node
+    minetest.register_node(node_name, {
+        description = string.format("Routing Volume color variation %i %s", i, array_to_s(bitstring)),
+        tiles = { string.format("routing_%i.png", i) },
+        drawtype = "nodebox",
+        node_box = {
+            type = "connected",
+            fixed = {
+                -3/8 - bitstring[1] * 1/8,
+                -3/8 - bitstring[5] * 1/8,
+                -3/8 - bitstring[3] * 1/8,
+                3/8 + bitstring[2] * 1/8,
+                3/8 + bitstring[6] * 1/8,
+                3/8 + bitstring[4] * 1/8
+            }
+        },
+        groups = { oddly_breakable_by_hand = 1, dig_immediate = 3, falling_node = 10 },  -- Break instantly by hand
+        drop = "latticesurgery:routing_item",
+
+        -- The on_dig callback to remove the node and break neighboring nodes
+        on_dig = function(pos)
+            local visited = {}
+            local start_id = core.get_meta(pos):get_int("id")
+            minetest.chat_send_all("before breaking pos  " .. start_id .. minetest.pos_to_string(pos) )
+            break_node(pos, start_id, visited)
+        end,
+
+        -- Add the on_construct callback to set the id
+        on_construct = function(pos)
+            local meta = minetest.get_meta(pos)
+            if not meta:contains("id") then
+                meta:set_int("id", i)
+            end
+        end,
+    })
+end
 end
 minetest.register_node("latticesurgery:dead_cell", {
     description = "Dead Cell",
@@ -328,7 +368,7 @@ minetest.register_node("latticesurgery:dead_cell", {
 
 
 -- initialize an empty vector
-LS_LOCAL_START_POS = vector.new(0,0,0)
+--LS_LOCAL_START_POS = vector.new(0,0,0)
 
 local function set_pos(name, param)
     local player = minetest.get_player_by_name(name)
