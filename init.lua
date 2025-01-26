@@ -18,7 +18,8 @@ local function insecure_load_file()
     local mod_path = minetest.get_modpath("latticesurgery")
     -- local json_file_path = mod_path .. "/crossings/grover_3.json"
     -- cp ~/CLionProjects/liblsqecc/cmake-build-debug/n_output.json .
-    local json_file_path = mod_path .. "/n_output.json"
+    local json_file_path = mod_path .. "/pandora.json"
+    -- local json_file_path = "/Users/palera1/repos/liblsqecc/cmake-build-debug/pandora.json"
     f = ie.io.open(json_file_path)
     s = f:read("a")
     ie.io.close(f)
@@ -408,4 +409,42 @@ minetest.register_chatcommand("set_pos", {
 
 minetest.register_chatcommand("crossings", {
     func = crossings
+})
+
+--local mod_path = minetest.get_modpath("latticesurgery")
+--dofile(mod_path .. "/script.lua")
+
+local http = minetest.request_http_api()
+assert(http)
+
+
+local function load_slices(name, param)
+    local t = "-1"
+    
+    http.fetch({
+            url = "http://127.0.0.1:5000/get_nr_slices"
+    }, function(res)
+            print(dump(res.data))
+            t = res.data
+                        
+            set_pos(name)
+    
+            local nr_slices = tonumber(t)
+            for t = 1, nr_slices do
+                http.fetch({
+                    url = "http://127.0.0.1:5000/get_slice/" .. tostring(t)
+                }, function(res)
+                    -- print(dump(res))
+                    place_layers(LS_LOCAL_START_POS, minetest.parse_json(res.data))
+
+                    LS_LOCAL_START_POS = add_vectors(LS_LOCAL_START_POS, { x = 0, y = 1 , z = 0 })
+                end)
+
+            end
+    end) 
+
+end
+
+minetest.register_chatcommand("load", {
+    func = load_slices
 })
