@@ -1,0 +1,101 @@
+[
+   [
+      [
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "None",
+               "Right": "None",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "1",
+            "text": ""
+         },
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "None",
+               "Right": "None",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "2",
+            "text": ""
+         }
+      ]
+   ],
+   [
+      [
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "None",
+               "Right": "AncillaJoin",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "3",
+            "text": ""
+         },
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "AncillaJoin",
+               "Right": "None",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "3",
+            "text": ""
+         }
+      ]
+   ],
+   [
+      [
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "None",
+               "Right": "None",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "4",
+            "text": ""
+         },
+         {
+            "activity": {
+               "activity_type": null
+            },
+            "edges": {
+               "Bottom": "None",
+               "Left": "None",
+               "Right": "None",
+               "Top": "None"
+            },
+            "patch_type": "Ancilla",
+            "routing_region_id": "5",
+            "text": ""
+         }
+      ]
+   ],
+   [
+      null,null
+   ]
+]
