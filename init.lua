@@ -339,7 +339,9 @@ for i = 1, 12, 1 do
                 3/8 + bitstring[4] * 1/8
             }
         },
-        groups = { oddly_breakable_by_hand = 1, dig_immediate = 3, falling_node = 10 },  -- Break instantly by hand
+        -- groups = { oddly_breakable_by_hand = 1, dig_immediate = 3, falling_node = 10 },  -- Break instantly by hand
+        groups = { oddly_breakable_by_hand = 1, dig_immediate = 3 },  -- Break instantly by hand
+
         drop = "latticesurgery:routing_item",
 
         -- The on_dig callback to remove the node and break neighboring nodes
