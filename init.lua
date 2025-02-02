@@ -177,19 +177,8 @@ for j = 0, 63, 1 do
                 3/8 + bitstring[4] * 1/8
             }
         },
-        --groups = {cracky = 1}, -- , falling_node=2},
-        groups = {oddly_breakable_by_hand = 1, dig_immediate = 3},  -- Break instantly by hand
-        -- The on_dig callback to remove the node and break neighboring nodes
+        groups = {oddly_breakable_by_hand = 1, dig_immediate = 3},  
         on_dig = function(pos, node, digger)
-            -- Break the original routing node
-            --local start_id = core.get_meta(pos):get_int("id")
-            --local start_id = routingRegionId
-            --minetest.remove_node(pos)
-            --local coords = minetest.pos_to_string(pos)
-
-            --minetest.chat_send_all("Start from" .. start_id )
-            
-            --break_neighbors(pos, start_id)
             
         end
     })
@@ -226,84 +215,54 @@ LS_LOCAL_START_POS = vector.new(0, 0, 0)
 -- Initialize the broken_nodes table
 local broken_nodes = {}
 
-local function has_neighbor(pos)
-    local check = false
-    local neighbors = {
-        {x = pos.x + 1, y = pos.y, z = pos.z},  -- Oikea
-        {x = pos.x - 1, y = pos.y, z = pos.z},  -- Vasen
-        {x = pos.x,     y = pos.y, z = pos.z + 1},  -- Eteen
-        {x = pos.x,     y = pos.y, z = pos.z - 1},  -- Taakse
-    }
-
-    -- Käy kaikki naapurit läpi
-    for _, neighbor_pos in ipairs(neighbors) do
-        if  neighbor_pos.y == pos.y then
-            check = true
-        else 
-            check = false
-        end
-    end
-
-    return check
-end
 
 function check_and_fall(pos, visited)
-    visited = visited or {} -- Initialize the visited table if it's not provided
-
-    -- Create a unique key for the current position
+    visited = visited or {} 
     local pos_key = minetest.pos_to_string(pos)
     if visited[pos_key] then
-        return -- If this position has already been checked, stop recursion
+        return 
     end
-    visited[pos_key] = true -- Mark this position as visited
+    visited[pos_key] = true 
 
-    -- Get the ID of the current block
     local rid = -1
     local meta = core.get_meta(pos)
     if meta:contains("id") then
         rid = meta:get_int("id")
     else
-        return -- No ID, stop processing
+        return 
     end
 
-    -- Position below the current block
+
     local below = {x = pos.x, y = pos.y - 1, z = pos.z}
     local below_meta = core.get_meta(below)
 
-    -- Check if the block below provides support
     if below_meta:contains("id") and below_meta:get_int("id") == rid then
-        return -- Block below provides support, do not fall
+        return 
     end
 
-    -- Neighbor positions (x, z plane)
     local neighbors = {
-        {x = pos.x + 1, y = pos.y, z = pos.z},  -- Right
-        {x = pos.x - 1, y = pos.y, z = pos.z},  -- Left
-        {x = pos.x,     y = pos.y, z = pos.z + 1},  -- Front
-        {x = pos.x,     y = pos.y, z = pos.z - 1}   -- Back
+        {x = pos.x + 1, y = pos.y, z = pos.z}, 
+        {x = pos.x - 1, y = pos.y, z = pos.z}, 
+        {x = pos.x,     y = pos.y, z = pos.z + 1}, 
+        {x = pos.x,     y = pos.y, z = pos.z - 1}  
     }
 
-    -- Check neighbors for support
     for _, neighbor_pos in ipairs(neighbors) do
         local neighbor_meta = core.get_meta(neighbor_pos)
 
-        -- If a neighbor has the same ID, recursively check its below
         if neighbor_meta:contains("id") and neighbor_meta:get_int("id") == rid then
             local neighbor_below = {x = neighbor_pos.x, y = neighbor_pos.y - 1, z = neighbor_pos.z}
             local neighbor_below_meta = core.get_meta(neighbor_below)
 
-            -- If the neighbor's below provides support, do not fall
             if neighbor_below_meta:contains("id") then
-                return -- Neighbor provides support, do not fall
+                return 
             end
         end
     end
 
-    -- Trigger falling for the current block
     local node = minetest.get_node(pos)
     minetest.add_entity(pos, "__builtin:falling_node")
 
-    -- Recursively check neighbors to fall if needed
     for _, neighbor_pos in ipairs(neighbors) do
         check_and_fall(neighbor_pos, visited)
     end
@@ -312,11 +271,9 @@ end
     
 
 
--- Function to check if a node is a qubit or routing node and break it if it is
 local function break_node(pos, start_id, visited)
     local node = minetest.get_node(pos)
 
-    -- Check if the node is a routing node
     if node.name:match("^latticesurgery:routing") then
         local rid = -1
         local meta = core.get_meta(pos)
@@ -324,58 +281,49 @@ local function break_node(pos, start_id, visited)
         if meta:contains("id") then
             rid = meta:get_int("id")
         end
+        minetest.chat_send_all("Node ID: " .. rid)
 
         if tostring(rid) == tostring(start_id) then
-            broken_nodes[start_id] = pos 
-            pos_2 = broken_nodes[start_id]
-            --minetest.chat_send_all("ACTIOOOONNNNNN ".. start_id .. minetest.pos_to_string(pos_2))
-            local pos_above = {x = pos.x, y = pos.y + 1, z = pos.z}
-            check_and_fall(pos_above, visited)
             minetest.remove_node(pos)
-            -- Trigger falling check for nodes above
-            --check_and_fall_above(pos)
-            -- Continue breaking neighboring nodes
-
+            local pos_above = {x = pos.x, y = pos.y + 1, z = pos.z}
             break_neighbors(pos, start_id, visited)
-    
-            
+            check_and_fall(pos_above, visited)
 
         end
     end
 end
 
--- Function to check all neighbors for qubit or routing nodes and break them
 function break_neighbors(pos, start_id, visited)
     visited = visited or {}
 
-    -- Convert position to string for tracking visited nodes
     local spos = minetest.pos_to_string(pos)
     if visited[spos] then
-        return  -- Skip if already visited
+        return  
     end
-    visited[spos] = true  -- Mark this node as visited
+    visited[spos] = true 
 
-    -- Define the six neighbor positions (left, right, above, below, front, back)
     local neighbors = {
-        { x = pos.x + 1, y = pos.y, z = pos.z },  -- Right
-        { x = pos.x - 1, y = pos.y, z = pos.z },  -- Left
-        { x = pos.x, y = pos.y + 1, z = pos.z },  -- Above
-        { x = pos.x, y = pos.y - 1, z = pos.z },  -- Below
-        { x = pos.x, y = pos.y, z = pos.z + 1 },  -- Front
-        { x = pos.x, y = pos.y, z = pos.z - 1 },  -- Back
+        { x = pos.x + 1, y = pos.y, z = pos.z }, 
+        { x = pos.x - 1, y = pos.y, z = pos.z },  
+        { x = pos.x, y = pos.y + 1, z = pos.z },  
+        { x = pos.x, y = pos.y - 1, z = pos.z },  
+        { x = pos.x, y = pos.y, z = pos.z + 1 },  
+        { x = pos.x, y = pos.y, z = pos.z - 1 }, 
     }
 
-    -- Loop through all neighbors and check for qubit or routing nodes
+ 
     for _, neighbor_pos in ipairs(neighbors) do
-        break_node(neighbor_pos, start_id, visited)  -- Break qubit or routing neighbors recursively
+        local meta = core.get_meta(neighbor_pos)
+        if meta:contains("id") and tostring(meta:get_int("id")) == tostring(start_id) then
+            break_node(neighbor_pos, start_id, visited)
+        end
     end
 end
 
--- Loop to register routing nodes
+
 for i = 1, 12, 1 do
     local node_name = string.format("latticesurgery:routing_%i_%s", i, array_to_s(bitstring))
 
-    -- Register the routing node
     minetest.register_node(node_name, {
         description = string.format("Routing Volume color variation %i %s", i, array_to_s(bitstring)),
         tiles = { string.format("routing_%i.png", i) },
@@ -394,16 +342,12 @@ for i = 1, 12, 1 do
         groups = { oddly_breakable_by_hand = 1, dig_immediate = 3, falling_node = 10 },  -- Break instantly by hand
         drop = "latticesurgery:routing_item",
 
-        -- The on_dig callback to remove the node and break neighboring nodes
         on_dig = function(pos)
             local visited = {}
             local start_id = core.get_meta(pos):get_int("id")
-            minetest.chat_send_all("before breaking pos  " .. start_id .. minetest.pos_to_string(pos) )
             break_node(pos, start_id, visited)
-            minetest.chat_send_all("after  breaking pos  " .. start_id .. minetest.pos_to_string(pos) )
         end,
 
-        -- Add the on_construct callback to set the id
         on_construct = function(pos)
             local meta = minetest.get_meta(pos)
             if not meta:contains("id") then
