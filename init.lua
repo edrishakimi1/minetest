@@ -18,7 +18,7 @@ local function insecure_load_file()
     local mod_path = minetest.get_modpath("latticesurgery")
     -- local json_file_path = mod_path .. "/crossings/grover_3.json"
     -- cp ~/CLionProjects/liblsqecc/cmake-build-debug/n_output.json .
-    local json_file_path = mod_path .. "/pandora.json"
+    local json_file_path = mod_path .. "/n_output.json"
     -- local json_file_path = "/Users/palera1/repos/liblsqecc/cmake-build-debug/pandora.json"
     f = ie.io.open(json_file_path)
     s = f:read("a")
@@ -328,6 +328,8 @@ for i = 1, 12, 1 do
     minetest.register_node(node_name, {
         description = string.format("Routing Volume color variation %i %s", i, array_to_s(bitstring)),
         tiles = { string.format("routing_%i.png", i) },
+        -- top, bottom, right, left, front, back
+        -- tiles = { "time.png", "time.png", "red.png", "red.png", "blue.png", "blue.png" },
         drawtype = "nodebox",
         node_box = {
             type = "connected",
@@ -341,6 +343,11 @@ for i = 1, 12, 1 do
             }
         },
         -- groups = { oddly_breakable_by_hand = 1, dig_immediate = 3, falling_node = 10 },  -- Break instantly by hand
+        
+        --dig_immediate: (player can always pick up node without tool wear)
+        --#2: node is removed without tool wear after 0.5 seconds (rail, sign)
+        --#3: node is removed without tool wear after 0.15 seconds (torch)
+        
         groups = { oddly_breakable_by_hand = 1, dig_immediate = 3 },  -- Break instantly by hand
 
         drop = "latticesurgery:routing_item",
@@ -360,6 +367,7 @@ for i = 1, 12, 1 do
     })
 end
 end
+
 minetest.register_node("latticesurgery:dead_cell", {
     description = "Dead Cell",
     tiles = {"dead.png"},
@@ -368,10 +376,355 @@ minetest.register_node("latticesurgery:dead_cell", {
 })
 
 
+--
+-- TOP, BOTTOM, RIGHT, LEFT, FRONT, BACK
+--
+local cubetextures={
+    {-- 1
+        {
+            {"time.png", "time.png", "red.png", "red.png", "blue.png", "blue.png"},
+            {"time.png", "time.png", "blue.png", "blue.png", "red.png", "red.png"}
+        },
+        {
+            {"time.png", "time.png", "red.png", "blue.png", "red.png", "blue.png"},
+            {"time.png", "time.png", "blue.png", "red.png", "blue.png", "red.png"}
+        },
+        {
+            {"time.png", "time.png", "red.png", "blue.png", "blue.png", "red.png"},
+            {"time.png", "time.png", "blue.png", "red.png", "red.png", "blue.png"},
+        },
+    },
+    {-- 2
+        {
+            {"time.png", "red.png", "time.png", "red.png", "blue.png", "blue.png"},
+            {"time.png", "blue.png", "time.png", "blue.png", "red.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "time.png", "blue.png", "red.png", "blue.png"},
+            {"time.png", "blue.png", "time.png", "red.png", "blue.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "time.png", "blue.png", "blue.png", "red.png"},
+            {"time.png", "blue.png", "time.png", "red.png", "red.png", "blue.png"},
+        },
+    },
+    {-- 3
+        {
+            {"time.png", "red.png", "red.png", "time.png", "blue.png", "blue.png"},
+            {"time.png", "blue.png", "blue.png", "time.png", "red.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "time.png", "red.png", "blue.png"},
+            {"time.png", "blue.png", "red.png", "time.png", "blue.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "time.png", "blue.png", "red.png"},
+            {"time.png", "blue.png", "red.png", "time.png", "red.png", "blue.png"},
+        },
+    },
+    {-- 4
+        {
+            {"time.png", "red.png", "red.png", "blue.png", "time.png", "blue.png"},
+            {"time.png", "blue.png", "blue.png", "red.png", "time.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "red.png", "time.png", "blue.png"},
+            {"time.png", "blue.png", "red.png", "blue.png", "time.png", "red.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "blue.png", "time.png", "red.png"},
+            {"time.png", "blue.png", "red.png", "red.png", "time.png", "blue.png"},
+        },
+    },
+    {-- 5
+        {
+            {"time.png", "red.png", "red.png", "blue.png", "blue.png", "time.png"},
+            {"time.png", "blue.png", "blue.png", "red.png", "red.png", "time.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "red.png", "blue.png", "time.png"},
+            {"time.png", "blue.png", "red.png", "blue.png", "red.png", "time.png"},
+        },
+        {
+            {"time.png", "red.png", "blue.png", "blue.png", "red.png", "time.png"},
+            {"time.png", "blue.png", "red.png", "red.png", "blue.png", "time.png"},
+        },
+    },
+    {-- 6
+        {
+            {"red.png", "time.png", "time.png", "red.png", "blue.png", "blue.png"},
+            {"blue.png", "time.png", "time.png", "blue.png", "red.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "time.png", "blue.png", "red.png", "blue.png"},
+            {"blue.png", "time.png", "time.png", "red.png", "blue.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "time.png", "blue.png", "blue.png", "red.png"},
+            {"blue.png", "time.png", "time.png", "red.png", "red.png", "blue.png"},
+        }
+    },
+    {-- 7
+        {
+            {"red.png", "time.png", "red.png", "time.png", "blue.png", "blue.png"},
+            {"blue.png", "time.png", "blue.png", "time.png", "red.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "time.png", "red.png", "blue.png"},
+            {"blue.png", "time.png", "red.png", "time.png", "blue.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "time.png", "blue.png", "red.png"},
+            {"blue.png", "time.png", "red.png", "time.png", "red.png", "blue.png"},
+        }
+    },
+    {-- 8
+        {
+            {"red.png", "time.png", "red.png", "blue.png", "time.png", "blue.png"},
+            {"blue.png", "time.png", "blue.png", "red.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "red.png", "time.png", "blue.png"},
+            {"blue.png", "time.png", "red.png", "blue.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "blue.png", "time.png", "red.png"},
+            {"blue.png", "time.png", "red.png", "red.png", "time.png", "blue.png"},
+        },
+    },
+    {-- 9
+        {
+            {"red.png", "time.png", "red.png", "blue.png", "blue.png", "time.png"},
+            {"blue.png", "time.png", "blue.png", "red.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "red.png", "blue.png", "time.png"},
+            {"blue.png", "time.png", "red.png", "blue.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "time.png", "blue.png", "blue.png", "red.png", "time.png"},
+            {"blue.png", "time.png", "red.png", "red.png", "blue.png", "time.png"},
+        },
+    },
+    {-- 10
+        {
+            {"red.png", "red.png", "time.png", "time.png", "blue.png", "blue.png"},
+            {"blue.png", "blue.png", "time.png", "time.png", "red.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "time.png", "red.png", "blue.png"},
+            {"blue.png", "red.png", "time.png", "time.png", "blue.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "time.png", "blue.png", "red.png"},
+            {"blue.png", "red.png", "time.png", "time.png", "red.png", "blue.png"},
+        },
+    },
+    {-- 11
+        {
+            {"red.png", "red.png", "time.png", "blue.png", "time.png", "blue.png"},
+            {"blue.png", "blue.png", "time.png", "red.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "red.png", "time.png", "blue.png"},
+            {"blue.png", "red.png", "time.png", "blue.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "blue.png", "time.png", "red.png"},
+            {"blue.png", "red.png", "time.png", "red.png", "time.png", "blue.png"},
+        }
+    },
+    {-- 12
+        {
+            {"red.png", "red.png", "time.png", "blue.png", "blue.png", "time.png"},
+            {"blue.png", "blue.png", "time.png", "red.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "red.png", "blue.png", "time.png"},
+            {"blue.png", "red.png", "time.png", "blue.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "time.png", "blue.png", "red.png", "time.png"},
+            {"blue.png", "red.png", "time.png", "red.png", "blue.png", "time.png"},
+        }
+    },
+    {-- 13
+        {
+            {"red.png", "red.png", "blue.png", "time.png", "time.png", "blue.png"},
+            {"blue.png", "blue.png", "red.png", "time.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "red.png", "time.png", "time.png", "blue.png"},
+            {"blue.png", "red.png", "blue.png", "time.png", "time.png", "red.png"},
+        },
+        {
+            {"red.png", "blue.png", "blue.png", "time.png", "time.png", "red.png"},
+            {"blue.png", "red.png", "red.png", "time.png", "time.png", "blue.png"},
+        }
+    },
+    {-- 14
+        {
+            {"red.png", "red.png", "blue.png", "time.png", "blue.png", "time.png"},
+            {"blue.png", "blue.png", "red.png", "time.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "red.png", "time.png", "blue.png", "time.png"},
+            {"blue.png", "red.png", "blue.png", "time.png", "red.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "blue.png", "time.png", "red.png", "time.png"},
+            {"blue.png", "red.png", "red.png", "time.png", "blue.png", "time.png"},
+        }
+    },
+    {-- 15
+        {
+            {"red.png", "red.png", "blue.png", "blue.png", "time.png", "time.png"},
+            {"blue.png", "blue.png", "red.png", "red.png", "time.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "red.png", "blue.png", "time.png", "time.png"},
+            {"blue.png", "red.png", "blue.png", "red.png", "time.png", "time.png"},
+        },
+        {
+            {"red.png", "blue.png", "blue.png", "red.png", "time.png", "time.png"},
+            {"blue.png", "red.png", "red.png", "blue.png", "time.png", "time.png"},
+        }
+    },
+}
+
+
+for io = 1, 5, 1 do
+    for ops = 1, 3, 1 do
+        for fl = 1, 2, 1 do
+            local c_name = string.format("latticesurgery:cube_%i_%i_%i", io, ops, fl)
+        end
+    end
+end
+
+
+--
+-- TOP, BOTTOM, RIGHT, LEFT, FRONT, BACK
+--
+local pipetexture = {
+    { "time.png", "time.png", "red.png", "red.png", "blue.png", "blue.png"},
+    { "time.png", "time.png", "blue.png", "blue.png", "red.png", "red.png"},
+    { "blue.png", "blue.png", "time.png", "time.png", "red.png", "red.png"},
+    { "blue.png", "blue.png", "red.png", "red.png", "time.png", "time.png"},
+    { "red.png", "red.png", "blue.png", "blue.png", "time.png", "time.png"},
+    { "red.png", "red.png", "time.png", "time.png", "blue.png", "blue.png"},
+}
+
+local cornertexture = {
+    { "time.png", "time.png", "red.png", "blue.png", "blue.png", "red.png"},
+    { "time.png", "time.png", "blue.png", "red.png", "blue.png", "red.png"},
+    { "time.png", "time.png", "blue.png", "red.png", "blue.png", "red.png"},
+}
+
+---
+--- Add nodes for the possible positions of logical operators
+---
+local current_node_type = "latticesurgery:rotate_01"
+
+for i = 0, 5, 1 do
+    local c_name = string.format("latticesurgery:rotate_0%i", i+1)
+    local n_name = string.format("latticesurgery:rotate_0%i", (i+1) % 6 + 1)
+
+    minetest.chat_send_all(c_name .. " " .. n_name) 
+
+    minetest.register_node(c_name, {
+        description = string.format("Tube_%i", i+1),
+        tiles = pipetexture[i+1],
+        drawtype = "nodebox",
+        node_box = {
+            type = "connected",
+            fixed = {
+                -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
+            }
+        },  
+        groups = { oddly_breakable_by_hand = 1, dig_immediate = 2 },
+
+        drop = "latticesurgery:tube",
+
+        on_punch = function(pos, node, puncher, pointed_thing)
+            local meta = minetest.get_meta(pos)
+            minetest.swap_node(pos, { name = n_name})
+            current_node_type = n_name
+
+            local wielded_item = puncher:get_wielded_item()
+            if wielded_item then
+                local item_name = wielded_item:get_name()
+                minetest.chat_send_all("You used: " .. item_name .. " for " .. node.name)
+                
+                local n_io = 0
+                local n_op = 0
+                local n_flip = 0
+                
+                if item_name == "latticesurgery:tool_io" then
+                    n_io = (n_io + 1) % 15
+                end
+
+                if item_name == "latticesurgery:tool_op" then
+                    n_op = (n_op + 1) % 3
+                end
+
+                if item_name == "latticesurgery:tool_flip" then
+                    n_flip = (n_flip + 1) % 2
+                end
+
+                n_name = string.format("latticesurgery:cube_%i_%i_%i", n_io, n_op, n_flip)
+
+            -- else
+            --     minetest.chat_send_all("You used your bare hands")
+            end
+        end,
+
+        -- on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+        --     if clicker:is_player() then
+        --         core.chat_send_player(clicker:get_player_name(), "Hello world!")
+        --     end
+        -- end,
+        -- on_construct = function(pos, node)
+        --     local meta = core.get_meta(pos)
+        --     meta:set_string("infotext", "My node!")
+        -- end,
+        after_place_node = function(pos, placer, itemstack, pointed_thing)
+            -- Make sure to check placer
+            -- if placer and placer:is_player() then
+            --     local meta = core.get_meta(pos)
+            --     meta:set_string("owner", placer:get_player_name())
+            -- end
+            minetest.swap_node(pos, { name = current_node_type})
+        end,
+    })
+end
+
+-- minetest.register_node("latticesurgery:rotated_1", {
+--     description = string.format("Tube"),
+--     tiles = { "time.png", "time.png", "blue.png", "blue.png", "red.png", "red.png"},
+--     drawtype = "nodebox",
+--     node_box = {
+--         type = "connected",
+--         fixed = {
+--             -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
+--         }
+--     },  
+--     groups = { oddly_breakable_by_hand = 1, dig_immediate = 2 },
+
+--     drop = "lscom:tube",
+
+--     on_punch = function(pos)
+--         local meta = minetest.get_meta(pos)
+--         minetest.swap_node(pos, { name = "latticesurgery:rotated_2"})
+--     end,
+-- })
+
 -- initialize an empty vector
 --LS_LOCAL_START_POS = vector.new(0,0,0)
 
 local function set_pos(name, param)
+
+    minetest.chat_send_all(name)
+
     local player = minetest.get_player_by_name(name)
     LS_LOCAL_START_POS = vector.round(player:get_pos())
 
@@ -447,4 +800,69 @@ end
 
 minetest.register_chatcommand("load", {
     func = load_slices
+})
+
+local function add_tool(name, param)
+    local player = minetest.get_player_by_name(name)
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_01 99")
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_02 99")
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_03 99")
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_04 99")
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_05 99")
+    -- player:get_inventory():add_item("main", "latticesurgery:rotate_06 99")
+end
+
+minetest.register_chatcommand("tool",{
+    func = add_tool
+})
+
+core.register_tool("latticesurgery:tool_io", {
+    description = "IO Tool",
+    inventory_image = "tool_io.png",
+    tool_capabilities = {
+        full_punch_interval = 1.5,
+        max_drop_level = 1,
+        groupcaps = {
+            crumbly = {
+                maxlevel = 2,
+                uses = 20,
+                times = { [1]=1.60, [2]=1.20, [3]=0.80 }
+            },
+        },
+        damage_groups = {fleshy=2},
+    },
+})
+
+core.register_tool("latticesurgery:tool_op", {
+    description = "Op Tool",
+    inventory_image = "tool_op.png",
+    tool_capabilities = {
+        full_punch_interval = 1.5,
+        max_drop_level = 1,
+        groupcaps = {
+            crumbly = {
+                maxlevel = 2,
+                uses = 20,
+                times = { [1]=1.60, [2]=1.20, [3]=0.80 }
+            },
+        },
+        damage_groups = {fleshy=2},
+    },
+})
+
+core.register_tool("latticesurgery:tool_flip", {
+    description = "Flip Tool",
+    inventory_image = "tool_flip.png",
+    tool_capabilities = {
+        full_punch_interval = 1.5,
+        max_drop_level = 1,
+        groupcaps = {
+            crumbly = {
+                maxlevel = 2,
+                uses = 20,
+                times = { [1]=1.60, [2]=1.20, [3]=0.80 }
+            },
+        },
+        damage_groups = {fleshy=2},
+    },
 })
