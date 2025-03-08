@@ -10,7 +10,17 @@ local function add_vectors(vector1, vector2)
         error("Both arguments must be tables representing vectors")
     end
 end
- 
+
+function split(inputstr, sep)
+    if sep == nil then
+      sep = "%s" -- Default to whitespace
+    end
+    local t = {}
+    for str in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
+      table.insert(t, str)
+    end
+    return t
+end
 
 ie = minetest.request_insecure_environment()
 
@@ -593,15 +603,6 @@ local cubetextures={
 }
 
 
-for io = 1, 5, 1 do
-    for ops = 1, 3, 1 do
-        for fl = 1, 2, 1 do
-            local c_name = string.format("latticesurgery:cube_%i_%i_%i", io, ops, fl)
-        end
-    end
-end
-
-
 --
 -- TOP, BOTTOM, RIGHT, LEFT, FRONT, BACK
 --
@@ -623,79 +624,95 @@ local cornertexture = {
 ---
 --- Add nodes for the possible positions of logical operators
 ---
-local current_node_type = "latticesurgery:rotate_01"
+local current_node_type = "latticesurgery:cube_01"
 
-for i = 0, 5, 1 do
-    local c_name = string.format("latticesurgery:rotate_0%i", i+1)
-    local n_name = string.format("latticesurgery:rotate_0%i", (i+1) % 6 + 1)
+for io = 1, 15, 1 do
+    for ops = 1, 3, 1 do
+        for fl = 1, 2, 1 do
+            local c_name = string.format("latticesurgery:cube_%i_%i_%i", io, ops, fl)
 
-    minetest.chat_send_all(c_name .. " " .. n_name) 
+            -- local c_name = string.format("latticesurgery:rotate_0%i", i+1)
+            -- local n_name = string.format("latticesurgery:rotate_0%i", (i+1) % 6 + 1)
 
-    minetest.register_node(c_name, {
-        description = string.format("Tube_%i", i+1),
-        tiles = pipetexture[i+1],
-        drawtype = "nodebox",
-        node_box = {
-            type = "connected",
-            fixed = {
-                -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
-            }
-        },  
-        groups = { oddly_breakable_by_hand = 1, dig_immediate = 2 },
+            -- minetest.chat_send_all(c_name .. " " .. n_name) 
 
-        drop = "latticesurgery:tube",
+            minetest.register_node(c_name, {
+                description = "The cube for " .. c_name,
+                tiles = cubetextures[io][ops][fl],
+                drawtype = "nodebox",
+                node_box = {
+                    type = "connected",
+                    fixed = {
+                        -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
+                    }
+                },  
+                groups = { oddly_breakable_by_hand = 1, dig_immediate = 2 },
 
-        on_punch = function(pos, node, puncher, pointed_thing)
-            local meta = minetest.get_meta(pos)
-            minetest.swap_node(pos, { name = n_name})
-            current_node_type = n_name
+                drop = "latticesurgery:tube",
 
-            local wielded_item = puncher:get_wielded_item()
-            if wielded_item then
-                local item_name = wielded_item:get_name()
-                minetest.chat_send_all("You used: " .. item_name .. " for " .. node.name)
-                
-                local n_io = 0
-                local n_op = 0
-                local n_flip = 0
-                
-                if item_name == "latticesurgery:tool_io" then
-                    n_io = (n_io + 1) % 15
-                end
+                on_punch = function(pos, node, puncher, pointed_thing)
 
-                if item_name == "latticesurgery:tool_op" then
-                    n_op = (n_op + 1) % 3
-                end
+                    local wielded_item = puncher:get_wielded_item()
+                    if wielded_item then
+                        local item_name = wielded_item:get_name()
+                        minetest.chat_send_all("You used: " .. item_name .. " for " .. node.name)
 
-                if item_name == "latticesurgery:tool_flip" then
-                    n_flip = (n_flip + 1) % 2
-                end
+                        local vals = split(node.name, "_")
+                        
+                        local n_io = tonumber(vals[2])
+                        local n_op = tonumber(vals[3])
+                        local n_flip = tonumber(vals[4])
+                        
+                        if item_name == "latticesurgery:tool_io" then
+                            n_io = (n_io + 1) 
+                            if n_io > 15 then
+                                n_io = n_io - 15
+                            end
+                        end
 
-                n_name = string.format("latticesurgery:cube_%i_%i_%i", n_io, n_op, n_flip)
+                        if item_name == "latticesurgery:tool_op" then
+                            n_op = (n_op + 1)
+                            if n_op > 3 then
+                                n_op = n_op - 3
+                            end
+                        end
 
-            -- else
-            --     minetest.chat_send_all("You used your bare hands")
-            end
-        end,
+                        if item_name == "latticesurgery:tool_flip" then
+                            n_flip = (n_flip + 1)
+                            if n_flip > 2 then
+                                n_flip = n_flip - 2
+                            end
+                        end
 
-        -- on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-        --     if clicker:is_player() then
-        --         core.chat_send_player(clicker:get_player_name(), "Hello world!")
-        --     end
-        -- end,
-        -- on_construct = function(pos, node)
-        --     local meta = core.get_meta(pos)
-        --     meta:set_string("infotext", "My node!")
-        -- end,
-        after_place_node = function(pos, placer, itemstack, pointed_thing)
-            -- Make sure to check placer
-            -- if placer and placer:is_player() then
-            --     local meta = core.get_meta(pos)
-            --     meta:set_string("owner", placer:get_player_name())
-            -- end
-            minetest.swap_node(pos, { name = current_node_type})
-        end,
-    })
+                        n_name = string.format("latticesurgery:cube_%i_%i_%i", n_io, n_op, n_flip)
+                        current_node_type = n_name
+                        minetest.swap_node(pos, { name = n_name})
+
+                    -- else
+                    --     minetest.chat_send_all("You used your bare hands")
+                    end
+                end,
+
+                -- on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+                --     if clicker:is_player() then
+                --         core.chat_send_player(clicker:get_player_name(), "Hello world!")
+                --     end
+                -- end,
+                -- on_construct = function(pos, node)
+                --     local meta = core.get_meta(pos)
+                --     meta:set_string("infotext", "My node!")
+                -- end,
+                after_place_node = function(pos, placer, itemstack, pointed_thing)
+                    -- Make sure to check placer
+                    -- if placer and placer:is_player() then
+                    --     local meta = core.get_meta(pos)
+                    --     meta:set_string("owner", placer:get_player_name())
+                    -- end
+                    minetest.swap_node(pos, { name = current_node_type})
+                end,
+            })
+        end
+    end
 end
 
 -- minetest.register_node("latticesurgery:rotated_1", {
@@ -804,12 +821,10 @@ minetest.register_chatcommand("load", {
 
 local function add_tool(name, param)
     local player = minetest.get_player_by_name(name)
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_01 99")
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_02 99")
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_03 99")
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_04 99")
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_05 99")
-    -- player:get_inventory():add_item("main", "latticesurgery:rotate_06 99")
+    player:get_inventory():add_item("main", "latticesurgery:tool_io 99")
+    player:get_inventory():add_item("main", "latticesurgery:tool_op 99")
+    player:get_inventory():add_item("main", "latticesurgery:tool_flip 99")
+    player:get_inventory():add_item("main", "latticesurgery:cube_1_1_1 99")
 end
 
 minetest.register_chatcommand("tool",{
