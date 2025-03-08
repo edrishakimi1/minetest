@@ -624,17 +624,12 @@ local cornertexture = {
 ---
 --- Add nodes for the possible positions of logical operators
 ---
-local current_node_type = "latticesurgery:cube_01"
+local current_node_type = "latticesurgery:cube_1_1_1"
 
 for io = 1, 15, 1 do
     for ops = 1, 3, 1 do
         for fl = 1, 2, 1 do
             local c_name = string.format("latticesurgery:cube_%i_%i_%i", io, ops, fl)
-
-            -- local c_name = string.format("latticesurgery:rotate_0%i", i+1)
-            -- local n_name = string.format("latticesurgery:rotate_0%i", (i+1) % 6 + 1)
-
-            -- minetest.chat_send_all(c_name .. " " .. n_name) 
 
             minetest.register_node(c_name, {
                 description = "The cube for " .. c_name,
@@ -655,7 +650,7 @@ for io = 1, 15, 1 do
                     local wielded_item = puncher:get_wielded_item()
                     if wielded_item then
                         local item_name = wielded_item:get_name()
-                        minetest.chat_send_all("You used: " .. item_name .. " for " .. node.name)
+                        -- minetest.chat_send_all("You used: " .. item_name .. " for " .. node.name)
 
                         local vals = split(node.name, "_")
                         
@@ -668,16 +663,12 @@ for io = 1, 15, 1 do
                             if n_io > 15 then
                                 n_io = n_io - 15
                             end
-                        end
-
-                        if item_name == "latticesurgery:tool_op" then
+                        elseif item_name == "latticesurgery:tool_op" then
                             n_op = (n_op + 1)
                             if n_op > 3 then
                                 n_op = n_op - 3
                             end
-                        end
-
-                        if item_name == "latticesurgery:tool_flip" then
+                        elseif item_name == "latticesurgery:tool_flip" then
                             n_flip = (n_flip + 1)
                             if n_flip > 2 then
                                 n_flip = n_flip - 2
@@ -689,7 +680,7 @@ for io = 1, 15, 1 do
                         minetest.swap_node(pos, { name = n_name})
 
                     -- else
-                    --     minetest.chat_send_all("You used your bare hands")
+                        minetest.chat_send_all("current cube " .. n_name)
                     end
                 end,
 
@@ -702,6 +693,7 @@ for io = 1, 15, 1 do
                 --     local meta = core.get_meta(pos)
                 --     meta:set_string("infotext", "My node!")
                 -- end,
+
                 after_place_node = function(pos, placer, itemstack, pointed_thing)
                     -- Make sure to check placer
                     -- if placer and placer:is_player() then
