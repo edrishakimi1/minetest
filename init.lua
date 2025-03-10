@@ -1,3 +1,154 @@
+minetest.register_node("latticesurgery:flat", {
+    description = "white flat tile",
+    tiles = {"white.png"}, -- is white
+    groups = {cracky = 3},
+
+    drawtype = "nodebox",
+    node_box = {
+        type = "connected",
+        fixed = {
+            -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
+        }
+    }, 
+
+    sounds = default.node_sound_stone_defaults(),
+})
+
+local storage_ref = minetest.get_mod_storage()
+local stored_centerpos = {}
+local check = storage_ref:get_string("spawnbuilder_centerpos_x")
+if check ~= "" then
+	stored_centerpos.x = storage_ref:get_int("spawnbuilder_centerpos_x")
+	stored_centerpos.y = storage_ref:get_int("spawnbuilder_centerpos_y")
+	stored_centerpos.z = storage_ref:get_int("spawnbuilder_centerpos_z")
+	minetest.log("action", "[spawnbuilder] Spawn platform position loaded: "..minetest.pos_to_string(stored_centerpos))
+else
+	stored_centerpos = minetest.setting_get_pos("static_spawnpoint")
+	-- Default position
+	if not stored_centerpos then
+		stored_centerpos = { x=0, y=-1, z=0 }
+	end
+	storage_ref:set_int("spawnbuilder_centerpos_x", stored_centerpos.x)
+	storage_ref:set_int("spawnbuilder_centerpos_y", stored_centerpos.y)
+	storage_ref:set_int("spawnbuilder_centerpos_z", stored_centerpos.z)
+	minetest.log("action", "[spawnbuilder] Initial spawn platform position registered and saved: "..minetest.pos_to_string(stored_centerpos))
+end
+
+-- Width of the stored_centerpos platform
+local WIDTH
+check = storage_ref:get_string("spawnbuilder_width")
+if check ~= "" then
+	WIDTH = check
+else
+	WIDTH = tonumber(minetest.settings:get("spawnbuilder_width"))
+	if type(WIDTH) == "number" then
+		WIDTH = math.floor(WIDTH)
+	else
+		WIDTH = 100
+	end
+end
+minetest.log("action", "[spawnbuilder] Using spawn platform width of "..WIDTH..".")
+
+-- Height of the platform
+local HEIGHT = 2
+
+-- Number of air layers above the platform
+local AIRSPACE = 3
+
+-- Generates the platform or platform piece within minp and maxp with the center at centerpos
+local function generate_platform(minp, maxp, centerpos)
+	-- Get stone and cobble nodes, based on the mapgen aliases. This allows for great compability with practically
+	-- all subgames!
+	-- local c_stone = minetest.get_content_id("mapgen_stone")
+	-- local c_cobble 
+	-- if minetest.registered_aliases["mapgen_cobble"] == "air" or minetest.registered_aliases["mapgen_cobble"] == nil then
+	-- 	-- Fallback option: If cobble mapgen alias is inappropriate or missing, use stone instead.
+	-- 	c_cobble = c_stone
+	-- else
+	-- 	c_cobble = minetest.get_content_id("mapgen_cobble")
+	-- end
+
+    local c_cobble = minetest.get_content_id("latticesurgery:flat")
+    local c_stone = minetest.get_content_id("latticesurgery:flat")
+
+	local w_neg, w_pos
+	w_pos = math.floor(WIDTH / 2)
+	if math.fmod(WIDTH, 2) == 0 then
+		w_neg = -w_pos + 1
+	else
+		w_neg = -w_pos
+	end
+
+	local xmin = math.max(centerpos.x + w_neg, minp.x)
+	local xmax = math.min(centerpos.x + w_pos, maxp.x)
+	local zmin = math.max(centerpos.z + w_neg, minp.z)
+	local zmax = math.min(centerpos.z + w_pos, maxp.z)
+	local ymin = math.max(centerpos.y - (HEIGHT-1), minp.y)
+	local ymax = math.min(centerpos.y + AIRSPACE, maxp.y)
+
+	if maxp.x >= xmin and minp.x <= xmax and maxp.y >= ymin and minp.y <= ymax and maxp.z >= zmin and minp.z <= zmax then
+		local vm, emin, emax = minetest.get_mapgen_object("voxelmanip")
+		local data = vm:get_data()
+		local area = VoxelArea:new({MinEdge=emin, MaxEdge=emax})
+
+		for x = xmin, xmax do
+			for y = ymin, ymax do
+				for z = zmin, zmax do
+					local p_pos = area:index(x, y, z)
+					local pos = {x=x,y=y,z=z}
+					if minetest.registered_nodes[minetest.get_node(pos).name].is_ground_content == true then
+						if y <= centerpos.y then
+							if x == centerpos.x and y == centerpos.y and z == centerpos.z then
+								data[p_pos] = c_cobble
+								minetest.log("action", "[spawnbuilder] Spawn platform center generated at "..minetest.pos_to_string(pos)..".")
+							else
+								data[p_pos] = c_stone
+							end
+						elseif y >= centerpos.y + 1 and y <= ymax then
+							data[p_pos] = core.CONTENT_AIR
+						end
+					end
+				end
+			end
+		end
+
+		vm:set_data(data)
+		vm:calc_lighting()
+		vm:write_to_map()
+	end
+end
+
+minetest.register_on_generated(function(minp, maxp, seed)
+	local centerpos = table.copy(stored_centerpos)
+
+	if minp.x <= centerpos.x and maxp.x >= centerpos.x and minp.y <= centerpos.y and maxp.y >= centerpos.y and minp.z <= centerpos.z and maxp.z >= centerpos.z then
+		if not WIDTH or WIDTH <= 0 then
+			minetest.log("warning", "[spawnbuilder] Invalid spawnbuilder_width. Spawn platform will NOT be generated.")
+			return
+		end
+
+		local ground = false
+		local air = true
+		-- Check for solid ground
+		for y = 3, -6, -1 do
+			local nn = minetest.get_node({x=centerpos.x, y=centerpos.y+y, centerpos.z}).name
+			local walkable = minetest.registered_nodes[nn].walkable
+			if y >= 0 and nn ~= "air" then
+				air = false
+			elseif y < 0 and walkable then
+				ground = true
+			end
+		end
+		-- Player has enough space and ground to spawn safely. No change required
+		if air and ground then
+			minetest.log("action", "[spawnbuilder] Safe player spawn detected. Spawn platform will NOT be generated.")
+			return
+		end
+	end
+
+	generate_platform(minp, maxp, centerpos)
+end)
+
 local function add_vectors(vector1, vector2)
     if type(vector1) == "table" and type(vector2) == "table" then
         local result = {
@@ -673,14 +824,15 @@ for io = 1, 15, 1 do
                             if n_flip > 2 then
                                 n_flip = n_flip - 2
                             end
+                        elseif item_name == "latticesurgery:tool_pick" then
+                            
                         end
 
                         n_name = string.format("latticesurgery:cube_%i_%i_%i", n_io, n_op, n_flip)
                         current_node_type = n_name
                         minetest.swap_node(pos, { name = n_name})
 
-                    -- else
-                        minetest.chat_send_all("current cube " .. n_name)
+                        minetest.chat_send_all("current cube: " .. n_name .. "-> " .. array_to_s(cubetextures[n_io][n_op][n_flip]):gsub(".png"," "))
                     end
                 end,
 
@@ -706,29 +858,6 @@ for io = 1, 15, 1 do
         end
     end
 end
-
--- minetest.register_node("latticesurgery:rotated_1", {
---     description = string.format("Tube"),
---     tiles = { "time.png", "time.png", "blue.png", "blue.png", "red.png", "red.png"},
---     drawtype = "nodebox",
---     node_box = {
---         type = "connected",
---         fixed = {
---             -0.5, -0.5, -0.5, 0.5, 0.5, 0.5
---         }
---     },  
---     groups = { oddly_breakable_by_hand = 1, dig_immediate = 2 },
-
---     drop = "lscom:tube",
-
---     on_punch = function(pos)
---         local meta = minetest.get_meta(pos)
---         minetest.swap_node(pos, { name = "latticesurgery:rotated_2"})
---     end,
--- })
-
--- initialize an empty vector
---LS_LOCAL_START_POS = vector.new(0,0,0)
 
 local function set_pos(name, param)
 
@@ -816,6 +945,7 @@ local function add_tool(name, param)
     player:get_inventory():add_item("main", "latticesurgery:tool_io 99")
     player:get_inventory():add_item("main", "latticesurgery:tool_op 99")
     player:get_inventory():add_item("main", "latticesurgery:tool_flip 99")
+    player:get_inventory():add_item("main", "latticesurgery:tool_pick 99")
     player:get_inventory():add_item("main", "latticesurgery:cube_1_1_1 99")
 end
 
@@ -860,6 +990,23 @@ core.register_tool("latticesurgery:tool_op", {
 core.register_tool("latticesurgery:tool_flip", {
     description = "Flip Tool",
     inventory_image = "tool_flip.png",
+    tool_capabilities = {
+        full_punch_interval = 1.5,
+        max_drop_level = 1,
+        groupcaps = {
+            crumbly = {
+                maxlevel = 2,
+                uses = 20,
+                times = { [1]=1.60, [2]=1.20, [3]=0.80 }
+            },
+        },
+        damage_groups = {fleshy=2},
+    },
+})
+
+core.register_tool("latticesurgery:tool_pick", {
+    description = "Flip Tool",
+    inventory_image = "tool_pick.png",
     tool_capabilities = {
         full_punch_interval = 1.5,
         max_drop_level = 1,
