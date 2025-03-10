@@ -540,6 +540,16 @@ minetest.register_node("latticesurgery:dead_cell", {
 --
 -- TOP, BOTTOM, RIGHT, LEFT, FRONT, BACK
 --
+local position = {"TOP", "BOTTOM", "RIGHT", "LEFT", "FRONT", "BACK"}
+function string_cube_config(config)
+
+    local r = ""
+    for i, k in pairs(config) do
+        r = r .. position[i] .. "/" .. k:gsub(".png"," ")
+    end
+    return r
+end
+
 local cubetextures={
     {-- 1
         {
@@ -753,25 +763,6 @@ local cubetextures={
     },
 }
 
-
---
--- TOP, BOTTOM, RIGHT, LEFT, FRONT, BACK
---
-local pipetexture = {
-    { "time.png", "time.png", "red.png", "red.png", "blue.png", "blue.png"},
-    { "time.png", "time.png", "blue.png", "blue.png", "red.png", "red.png"},
-    { "blue.png", "blue.png", "time.png", "time.png", "red.png", "red.png"},
-    { "blue.png", "blue.png", "red.png", "red.png", "time.png", "time.png"},
-    { "red.png", "red.png", "blue.png", "blue.png", "time.png", "time.png"},
-    { "red.png", "red.png", "time.png", "time.png", "blue.png", "blue.png"},
-}
-
-local cornertexture = {
-    { "time.png", "time.png", "red.png", "blue.png", "blue.png", "red.png"},
-    { "time.png", "time.png", "blue.png", "red.png", "blue.png", "red.png"},
-    { "time.png", "time.png", "blue.png", "red.png", "blue.png", "red.png"},
-}
-
 ---
 --- Add nodes for the possible positions of logical operators
 ---
@@ -832,7 +823,7 @@ for io = 1, 15, 1 do
                         current_node_type = n_name
                         minetest.swap_node(pos, { name = n_name})
 
-                        minetest.chat_send_all("current cube: " .. n_name .. "-> " .. array_to_s(cubetextures[n_io][n_op][n_flip]):gsub(".png"," "))
+                        minetest.chat_send_all("current cube: " .. n_name .. "-> " .. string_cube_config(cubetextures[n_io][n_op][n_flip]))
                     end
                 end,
 
