@@ -1011,3 +1011,35 @@ core.register_tool("latticesurgery:tool_pick", {
         damage_groups = {fleshy=2},
     },
 })
+
+
+local function find_cube_name(config)
+    for io = 1, 15, 1 do
+        for ops = 1, 3, 1 do
+            for fl = 1, 2, 1 do
+                
+                local found = true
+                for idx = 1, 6, 1 do
+                    if cubetextures[io][ops][fl][idx] ~= config[idx] .. ".png" then
+                        found = false
+                    end
+                end
+                
+                if found == true then
+                    local n_name = string.format("latticesurgery:cube_%i_%i_%i", io, ops, fl)
+                    minetest.chat_send_all("current cube: " .. n_name .. "-> " .. string_cube_config(cubetextures[io][op][flip]))
+                    return n_name
+                end
+            end
+        end
+    end
+
+    return ""
+end
+
+minetest.register_chatcommand("rrttbb", {
+    func = function(name, param)
+        current_node_type = find_cube_name({"red", "red", "time", "time", "blue", "blue"})
+    end,
+})
+  
